@@ -1,0 +1,857 @@
+#!/bin/bash
+# 
+# Script to find, download, compile and install packages on/from slackbuilds.org
+#
+# Copyright 2015 Enguerrand de Rochefort slackbuilds@rochefort.de
+# All rights reserved.
+#
+# Redistribution and use of this script, with or without modification, is
+# permitted provided that the following conditions are met:
+#
+# 1. Redistributions of this script must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+#  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO
+#  EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+#  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+#  OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+#  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+#  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+#  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#########################################################################
+#                         HARD CODED CONFIG                             #
+#########################################################################
+CONF_DIR=/etc/sbm
+CONF_FILE=$CONF_DIR/sbm.conf
+PATCHES_DIR=$CONF_DIR/patches
+
+#########################################################################
+#    DEFAULT CONFIG. MAY BE OVERRIDDEN BY /etc/sbm/sbm.conf             #
+#########################################################################
+function create_default_config(){
+	if [ -f $CONF_FILE ];then
+		print_error "$CONF_FILE already exists. Please rename/move it before running setup!"
+	fi
+	if [ -f $CONF_DIR/regex.conf ];then
+		print_error "$CONF_DIR/regex.conf already exists. Please rename/move it before running setup!"
+	fi
+	if [ -f $PATCHES_DIR/template-patch.sh ];then
+		print_error "$PATCHES_DIR/template-patch.sh already exists. Please rename/move it before running setup!"
+	fi
+	
+	mkdir -p $CONF_DIR
+	mkdir -p $PATCHES_DIR
+	cat > $CONF_FILE <<- "EOF"
+		#
+		# /etc/sbm/sbm.conf
+		#
+		# Default configuration file for sbm
+		# This file is interpreted by the shell. The standard syntax rules apply
+		# accordingly. (E.g. no spaces between = and variable name / value etc...)
+		#
+		# The root directory for new slackbuilds
+		BUILD_DIR=/usr/src
+		#
+		# The slackware release you are currently running
+		RELEASE=14.1
+		#
+		# The release specific subdirectory for your builds
+		BUILD_SUBDIR=$BUILD_DIR/slackbuilds/$RELEASE
+		#
+		# The directory where meta data should be stored. (E.g. package lists etc.)
+		META_DIR=$BUILD_SUBDIR/PACKAGE_INFO
+		#
+		# Log file that keeps track of all sbm actions. (Install, update etc...)
+		SBM_LOGFILE=/var/log/sbm/sbm.log
+		#
+		# Log file that tracks version info for packages with exotic version formats
+		VERSIONS_LOGFILE=$META_DIR/VERSIONS.log
+		#
+		# The slackware packages log. You probably don't want to change this
+		PACKAGES_LOG_DIR=/var/log/packages
+		#
+		# The slackbuilds.org base url. This is not likely to change either
+		BASE_URL=http://slackbuilds.org/repository/$RELEASE
+		#
+		# If you are running a 32bit system you want to uncomment the 32bit line
+		# and comment the 64bit line. 
+		#MY_ARCH=32bit
+		MY_ARCH=64bit
+	EOF
+
+	cat > $CONF_DIR/regex.conf <<- "EOF"
+		# 
+		# /etc/sbm/regex.conf
+		#
+		# Default regex configuration file for sbm
+		# This file allows you to define regular expressions that sbm will use to
+		# derive versions from package names. This might be needed when the naming
+		# convention for a package deviates too much from what the majority of 
+		# packages are doing. 
+		# However, when that happens sbm should typically detect this and create an
+		# entry in VERSIONS.log, the location of which depends on your sbm.conf.
+		# With this mechanism everything should work fine, so typically this file
+		# here should never be needed. However, if something does go wrong, you can
+		# use this to override the sbm standard behavior.
+		#
+		# The syntax is as follows:
+		# - One line per package
+		# - Three values per line, delimited by spaces
+		# - These three values are:
+		# 	- Package name
+		#	- Regular expression to reliably recognize the package when matching 
+		#	  against a /var/log/packages/* entry
+		#	- Regular expression to read the version number from said entry in
+		#	  /var/log/packages/
+		#
+		# Example for portaudio.
+		# ls /var/log/packages/porta* yields:
+		# /var/log/packages/portaudio-V19-x86_64-2_SBo
+		# The below line would work to recognize portaudio as being installed with 
+		# version V19
+		#
+		# Example entry for portaudio
+		# portaudio ^portaudio-V.* V[0-9]+
+	EOF
+
+	cat <<- EOF
+		A default configuration was created in $CONF_DIR/
+		This configuration controls where everything is happening on the filesystem.
+		Take a look at $CONF_FILE and at $CONF_DIR/regex.conf and adapt to your needs.
+		Then start using sbm. 
+		Have fun!
+	EOF
+
+	cat > $PATCHES_DIR/template-patch.sh <<- "EOF"
+		#!/bin/bash
+		#
+		# Template script for automated patching with sbm.
+		# 
+		# To create a patch script for sbm copy this template and
+		# name it after the package. E.g. for package foobar the 
+		# script name should be foobar.sh
+		# 
+		# To prevent this template from running unexpectedly it
+		# does not have the executable permission flag set. For
+		# a script to become active you will need to run chmod +x
+		# on it. 
+		# 
+		# Assume that sbm will drop you into the directory of the
+		# unpacked slackbuild tarball. The source tarballs will
+		# be available in the directory, but will not have been
+		# unpacked, yet (as this is done by the actual slackbuild).
+		#
+		# This means that in order to patch sources, you'll need to
+		# unpack them yourself, patch them, and recompress them to
+		# their original format.
+		# One way to do that (assuming you only have a single sources
+		# tarball) would be as follows:
+		#
+		PACKAGE_NAME=foobar-package
+		#
+		# Find the tarball name
+		TARBALL=$(ls ./${PACKAGE_NAME}*tar.gz | head -n 1)
+		if [ "$TARBALL" == "" ];then
+		    echo "Sources tarball  not found!"
+		    exit -1
+		fi
+		#
+		# Extract it
+		tar xvzf $TARBALL || exit -1
+		#
+		# cd into the resulting directory
+		SUBDIR=$(echo $TARBALL | sed "s/.tar.gz//g")
+		cd $SUBDIR || exit -1
+		#
+		# Your patching code goes here. You can run sed commands, apply
+		# patch files, etc...
+		#
+		cd ..
+		#
+		# Repack the tarball, cause that is what the slackbuild will expect
+		# to see
+		tar cvzf $TARBALL $SUBDIR
+		#
+		# remove the subdir to avoid conflicts. 
+		rm -rf $SUBDIR
+	EOF
+}
+
+#########################################################################
+#                               USAGE                                   #
+#########################################################################
+
+function print_usage(){
+	cat <<- EOF
+		SlackBuildManager - Simple command line interface to manage slackbuild
+		packages. 
+
+		Usage: $(basename $0) [<FLAGS>] <ACTION> [<PACKAGE>]
+
+		Whether or not the parameter <PACKAGE> is needed depends on the chosen
+		ACTION.
+
+		ACTIONS:
+		  help              : Shows this help
+		  setup             : Initializes all needed configuration files / directories
+		  install <PACKAGE> : Installs package <PACKAGE>
+		  upgrade <PACKAGE> : Upgrades package <PACKAGE>
+		  upgrade-all       : Upgrades all outdated slackbuild packages
+		  remove  <PACKAGE> : Removes package <PACKAGE>
+		  search  <PACKAGE> : Looks for package <PACKAGE>
+		  info    <PACKAGE> : Shows info for package <PACKAGE>
+		  dep     <PACKAGE> : Lists dependencies for package <PACKAGE>                  
+		  update            : Updates the local copy of the package list
+		  list              : Lists all installed slackbuild packages
+		  status            : Lists packages for which newer versions are available
+				    : at Slackbuilds.org
+
+		FLAGS:
+		  -a: all. 
+		        Also list up-to date packages in conjunction with ACTION status
+
+		  -f: force. 
+		        Allow overriding errors in conjunction with ACTION install
+		        Allow overwriting existing config files in conjuction with ACTION
+		        setup
+
+		  -i: ignore. 
+		        Ignores patches in conjunction with ACTION install and upgrade
+
+		  -o: only-missing. 
+		        Shows only missing dependencies in conjunction with
+		        ACTION install and dep
+
+		  -p: prompt.
+		        Interrupts the process after extracting the slackbuild
+		        and downloading the sources so that patches can be applied.
+		        when used in conjuction ACTION install.
+
+		  -y: yes. 
+		        Skips dependency prompt (if all required dependencies are met) 
+		        on ACTIONs install, upgrade and upgrade-all
+	EOF
+}
+
+function abort(){
+	echo "Errors where found. Operation aborted."
+	if [ "$TARGET_DIR" != "" ];then
+		echo "To remove build dir type"
+		echo ""
+		echo "	rm -rf $TARGET_DIR"
+		echo ""
+	fi
+	exit -1
+}
+
+#########################################################################
+#                              MESSAGES                                 #
+#########################################################################
+function log(){
+	echo "$(date +%Y:%m:%d-%H:%M:%S) $1" >> $SBM_LOGFILE 
+}
+
+function print_ok(){
+	echo -e "[\033[00;32mOK\e[m] "$1
+}
+
+function print_warning(){
+	echo -e "[\e[1;33mWARNING\e[m] "$1
+}
+
+function print_error(){
+	echo -e "[\e[1;31mERROR\e[m] "$1
+	if [ "$FORCE" != "true" ];then
+		abort
+	fi
+}
+
+function user_confirm(){
+	echo "Continue? (Press y or j to continue)"
+	read user_input
+	if [[ "$user_input" =~ [YyJj] ]];then 
+		echo "Ok, here we go!"; 
+	else
+		echo "Aborting due to user request."
+		if [ "$TARGET_DIR" != "" ];then
+			echo "To remove build dir type"
+			echo ""
+			echo "	rm -rf $TARGET_DIR"
+			echo ""
+		fi
+		exit -1
+	fi
+}
+
+#########################################################################
+#                  CHECK AVAILABILITY OF META FILES                     #
+#########################################################################
+
+function check_meta_info_available(){
+	if [ ! -f $META_DIR/TAGS.txt ];then
+		print_error "No TAGS file found! Run \"$(basename $0) update\" to fix this."
+		exit -1
+	fi
+	if [ ! -f $META_DIR/SLACKBUILDS.TXT ];then
+		print_error "No SLACKBUILDS file found! Run \"$(basename $0)\" to fix this."
+		exit -1
+	fi	
+}
+
+#########################################################################
+#                  DOWNLOAD FILES WITH HTTP OR FTP                      #
+#########################################################################
+
+function get_file(){
+	local file_to_get=$1
+	local md5sum=$2
+	echo "Downloading file $file_to_get"
+	local filename=${file_to_get##*\/}
+	if [ -e $filename ] && [ "$INSTALL_TYPE" == "install" ];then
+		print_warning "$filename already exists! Download again?"
+		read decision
+		if [[ "$decision" =~ [YyJj] ]];then 
+			rm -f $filename
+		else
+			return
+		fi
+	elif [ -e $filename ];then # reinstall or upgrade => overwriting is ok
+		rm -f $filename
+	fi
+	local prot=${file_to_get%%\:*}
+	if [ "$prot" == "http" ];then
+		wget $file_to_get || abort
+	elif [ "$prot" == "https" ];then
+		wget --no-check-certificate $file_to_get || abort
+	else
+		curl $file_to_get > $filename || abort
+	fi
+	if [ -z $md5sum ];then
+		echo "No checksum provided"
+	else
+		local checksum=$(md5sum $filename | cut -d' ' -f 1)
+		if [ "$checksum" != "$md5sum" ];then
+			print_error "md5sum verification failed! File checksum: $checksum - Expected checksum: $md5sum"
+			if [ "$FORCE" != "true" ];then
+				abort
+			fi
+			user_confirm
+		else
+			print_ok "md5sum: $md5sum - Verification ok"
+		fi
+	fi
+}
+
+#########################################################################
+#                  UPDATE META INFO (PACKAGE LIST ETC)                  #
+#########################################################################
+
+function update_packages(){
+	cd $META_DIR
+	get_file ftp://ftp.slackbuilds.org/$RELEASE/SLACKBUILDS.TXT.gz
+	get_file ftp://ftp.slackbuilds.org/$RELEASE/TAGS.txt.gz
+	gunzip -f SLACKBUILDS.TXT.gz
+	gunzip -f TAGS.txt.gz
+}
+
+#########################################################################
+#                          SHOW PACKAGE INFO                            #
+#########################################################################
+
+function show_package(){
+	check_meta_info_available
+	local package_name=$1
+	grep -A 10 "SLACKBUILD NAME: $package_name\$" $META_DIR/SLACKBUILDS.TXT
+}
+
+function filename_to_package_name (){
+	local tarball_name=$1
+	# User regex
+	for K in "${!NAME_REGEX_MAP[@]}"; do
+		if echo $tarball_name | grep -q ${NAME_REGEX_MAP[$K]}; then
+			echo $K
+			return
+		fi
+	done
+	# Version log
+	for K in "${!PACKAGE_NAMES_MAP[@]}"; do
+		if [ "$tarball_name" == "${NAME_REGEX_MAP[$K]}" ];then
+			echo $K
+			return
+		fi
+	done
+	# Fallback
+	echo $1 | sed -r s/-r?[0-9].+//g 
+}
+
+function list_installed_packages(){
+	for tarball in $(ls ${PACKAGES_LOG_DIR}/*_SBo) ; do
+		filename_to_package_name ${tarball##*\/}	
+	done	
+	#ls ${PACKAGES_LOG_DIR}/*_SBo | sed -e s/-[0-9].*//g -e "s/.*\///g"
+}
+
+function get_package_installed_version(){
+	local package=$1
+	local name_regex=${NAME_REGEX_MAP[${package}]}
+	local version_regex=${VERSION_REGEX_MAP[$package]}
+	if [ "$version_regex" == "" ];then   # no user regex defined, try to lookup in VERSION.log
+		local lookup_version=${PACKAGE_VERSIONS_MAP[$package]}
+		if [ "$lookup_version" != "" ];then
+			echo $lookup_version
+			return
+		fi
+	fi
+	if [ "$name_regex" == "" ];then
+		escaped_package_name=$(echo $package | sed -e 's/[]\.|$(){}?+*^]/\\&/g')
+		name_regex="^${escaped_package_name}-r?[0-9]+"
+	fi
+	local resulting_name=$(ls $PACKAGES_LOG_DIR | egrep $name_regex)
+	if [ "$version_regex" == "" ];then
+		local result=$(echo $resulting_name | sed -e "s/-${MY_ARCH_PACKAGE_APPENDIX}.*\$//g" -e 's/-noarch.*$//g' -e "s/^${package}-//g")
+	else
+		local result=$(echo $resulting_name | egrep -o $version_regex)
+	fi
+	echo ${result:-"not installed"}
+}
+
+function get_package_sb_version(){
+	show_package $1 | grep VERSION | cut -d":" -f 2 | tr -d ' '
+}
+
+function list_package_update_status(){
+	local update_count=0
+	for package in $(list_installed_packages) ; do
+		local installed_version=$(get_package_installed_version $package)
+		local available_version=$(get_package_sb_version $package)
+		local output="$package ; Installed: $installed_version ; Available: $available_version"
+		if [ "$installed_version" != "$available_version" ] ;then
+			echo $output
+			update_count=$[ $update_count + 1  ]
+		elif [ "$ALL" == "true" ] ;then
+			echo $output
+		fi
+	done
+	if [ $update_count -eq 0 ];then
+		echo "All packages are up to date."
+	else
+		echo "=="
+		echo "Updates are available for $update_count package(s)."
+	fi
+}
+
+#########################################################################
+#                      SEARCH META INFO FOR PACKAGES                    #
+#########################################################################
+
+function search(){
+	check_meta_info_available
+	local search_term=$1
+	slackpkg search $search_term
+	echo "==== Slackbuilds found for search \"$search_term\":"
+	grep -i $search_term $META_DIR/TAGS.txt | grep -o ^.*: | tr -d ":"
+}
+
+#########################################################################
+#                     GET DOWNLOAD LINKS FOR PACKAGES                   #
+#########################################################################
+
+function parse_web_page(){
+	local url=$1
+	echo "Downloading $url"
+	wget -O slackpage.html $url || abort
+#	SOURCE_LINK=$(grep "Source Downloads" slackpage.html | grep -o \".*\/\/.*\" | tr -d "\"")
+	SLACKBUILD_LINK=$(grep "Download SlackBuild" slackpage.html | grep -o \".*\/\/.*\" | tr -d "\"")
+	rm -f slackpage.html
+}
+
+function get_sources(){
+	local url=$1
+	echo "Downloading $url"
+	wget -O slackpage.html $url || abort
+
+	local oldifs=$IFS
+	IFS=$'\n';
+	local in_center_section="false"
+	local wanted_link="false"
+	local noarch_package_found="false"
+	local archdep_package_found="false"
+	for line in $(cat ./slackpage.html);do
+		if [[ "$line" =~ 'class="section center"' ]];then
+			in_center_section="true"
+		elif [[ "$line" =~ 'Download SlackBuild' ]];then
+			in_center_section="false"
+		fi
+
+		if [ "$in_center_section" == "true" ];then
+			if [[ "$line" =~ "Source Downloads:" ]];then
+				wanted_link="true"
+				noarch_package_found="true"
+			elif [[ "$line" =~ "Source Downloads (Arch-Independent" ]];then
+				wanted_link="true"
+				noarch_package_found="true"
+			elif [[ "$line" =~ "Source Downloads ($MY_ARCH" ]];then
+				wanted_link="true"
+				archdep_package_found="true"
+			elif [[ "$line" =~ "Source Downloads" ]];then
+				wanted_link="false"
+			fi
+			if [ "$wanted_link"  == "true" ];then
+				local src_url=$(echo "$line" | grep -o \".*\/\/.*\" | tr -d '"')
+				local md5sum=$(echo "$line" | egrep -oi "\([a-z0-9]{32}\)" | egrep -oi '[a-z0-9]{32}')
+				echo "Downloading $src_url with expected md5sum $md5sum"
+				get_file $src_url $md5sum;
+			fi
+		fi
+	done
+	if [ "$noarch_package_found" != "true" ] && [ "$archdep_package_found" != "true" ];then
+		print_error "No matching sources found for archticture $MY_ARCH"
+	fi
+	IFS=$oldifs
+}
+
+#########################################################################
+#                     CHECK DEPENDENCIES FOR A PACKAGE                  #
+#########################################################################
+
+function check_dependencies() {
+	check_meta_info_available
+	local no_match_string="NO MATCHING PACKAGE found !!"
+	for package_to_check in $*;do
+		echo ""
+		echo "Dependencies for package $package_to_check :"
+		if grep -q "SLACKBUILD NAME: $package_to_check\$" $META_DIR/SLACKBUILDS.TXT ;then
+			local dependencies=$(grep -A 10 "SLACKBUILD NAME: $package_to_check\$" $META_DIR/SLACKBUILDS.TXT | grep REQUIRES | cut -d":" -f 2 )
+			local all_deps_met="true"
+			local optional_deps="false"
+			for DEP in $dependencies; do 
+				local found=$(ls $PACKAGES_LOG_DIR | grep ^${DEP}-[0-9])
+				if [ "$DEP" == "%README%" ];then
+					found="OPTIONAL dependencies MAY BE LISTED IN THE README FILE"
+					optional_deps="true"
+				fi
+				if [ "$found" == "" ];then
+					found=$no_match_string
+					all_deps_met="false"
+				fi
+				if [ "$found" == "$no_match_string" ] || [ "$ONLY_MATCHING" != "true" ];then
+					echo $DEP" : -> $found" 
+				fi
+			done
+			if [ "$all_deps_met" != "true" ]; then
+				print_error "SOME DEPENDENCIES WERE NOT FULLFILLED  !!!!"
+			elif [ "$optional_deps" == "true" ]; then
+				print_warning "SOME OPTIONAL DEPENDENCIES WERE NOT FULLFILLED !"
+			else
+				print_ok "All dependencies met."
+			fi
+			echo ""
+		else
+			print_warning "Package $package_to_check not found!"
+		fi
+	done
+}
+
+#########################################################################
+#                 BUILD / INSTALL / UPGRADE PACKAGE                     #
+#########################################################################
+
+function upgrade_all(){
+	for pkg in $(list_package_update_status | cut -d' ' -f 1) ; do 
+		if [ "$pkg" == "==" ];then
+			break
+		fi
+		upgrade_package $pkg 
+	done
+}
+
+function upgrade_package(){
+	local package_name=$1
+	local local_version=$(get_package_installed_version $package_name)
+	local sb_version=$(get_package_sb_version $package_name)
+	if [ "$local_version" == "$sb_version" ];then
+		print_ok "Package $package_name is already up to date."
+		return
+	fi	
+	install_package $package_name "upgrade"
+}
+
+function install_package(){
+	check_meta_info_available
+	local name=$1
+	INSTALL_TYPE=${2:-install}
+	local relative_path=$(grep -A 10 "SLACKBUILD NAME: $name$" $META_DIR/SLACKBUILDS.TXT | grep LOCATION | cut -d":" -f 2 | tr -d " .")
+	if [ "$relative_path" == "" ];then
+		print_error "Package $name not found!"
+		abort
+	fi
+	local url=${BASE_URL}${relative_path}"/"
+	echo "Package URL found: "$url
+	check_dependencies $name
+	if [ "$YES" != "true" ];then
+		echo "Abort with ctrl-c or continue with any key"
+	fi
+	read a
+	if [ -e $PACKAGES_LOG_DIR/$name-[0-9]* ] && [ "$INSTALL_TYPE" == "install" ]; then
+		echo ""
+		print_error "Package already installed: ";
+		ls $PACKAGES_LOG_DIR/$name-[0-9]*
+		user_confirm
+	fi
+	TARGET_DIR=$BUILD_SUBDIR/$name
+	mkdir -p $TARGET_DIR
+	cd $TARGET_DIR
+	parse_web_page $url
+	local slackbuild=${SLACKBUILD_LINK##*\/}
+	get_file $SLACKBUILD_LINK
+
+	SLACKBUILD_SUBDIR=$(echo $slackbuild | sed "s/.tar.gz//g")
+	if [ -e $SLACKBUILD_SUBDIR ] && [ "$INSTALL_TYPE" == "install" ];then
+		 print_warning "$TARGET_DIR already exists!";
+		 user_confirm
+		 rm -rf $SLACKBUILD_SUBDIR
+	elif [ -e $SLACKBUILD_SUBDIR ];then
+		rm -rf $SLACKBUILD_SUBDIR
+	fi
+	tar xvzf $slackbuild || abort
+	cd ${SLACKBUILD_SUBDIR} || abort
+	#get_file $SOURCE_LINK
+	get_sources $url
+	local build_script=$(ls | grep SlackBuild | head -n 1)
+	if [ -x $PATCHES_DIR/${name}.sh ] && [ "$IGNORE" != "TRUE" ];then
+		echo "Found patch script $PATCHES_DIR/${name}.sh. Apply now? [Y/n]"
+		read decision
+		if [[ "$decision" =~ [Nn] ]];then 
+			echo "Ok. Will ignore patch script."
+		else
+			echo "Ok. Applying patch script."
+			$PATCHES_DIR/${name}.sh
+		fi
+	fi
+	if [ "$PROMPT_FOR_PATCH" == "true" ];then
+		echo "Sources extracted. You can now apply patches. (Press any key to continue the build). Build dir:"
+		pwd
+		read sacksuppe
+	fi		
+	eval ./$build_script || abort
+	cd ..
+	local resulting_package=$(ls /tmp/${SLACKBUILD_SUBDIR}*_SBo.tgz)
+	mv $resulting_package . || abort 
+	local tarball_name=${resulting_package##*\/}
+	case "$INSTALL_TYPE" in 
+		'install')
+			installpkg $tarball_name || abort 
+			;;
+		'upgrade')
+			upgradepkg $tarball_name || abort
+			;;
+		*)
+			print_error "Unexpected install type $INSTALL_TYPE"	
+			abort
+	esac
+			
+	log "$INSTALL_TYPE - $name"
+	echo ""
+	local local_version=$(get_package_installed_version $name)
+	local sb_version=$(get_package_sb_version $name)
+	if [ "$sb_version" != "$local_version" ];then
+		sed -i "/^$name;/d" $VERSIONS_LOGFILE
+		echo $name";"$tarball_name";"$sb_version >> $VERSIONS_LOGFILE
+		print_warning "Unable to properly resolve installed package version. You may have to add an entry to $CONF_DIR/regex.conf."
+		echo "(You can run the following command to check if the version was properly remembered:)"
+		echo "	$(basename $0) version $name"
+	fi
+	print_ok "Completed successfully!"
+	echo ""
+}
+
+#########################################################################
+#                         PROCESS INPUT ARGUMENTS                       #
+#########################################################################
+
+while [[ $1 =~ ^- ]];do
+	case "$1" in
+		'-a')
+			ALL="true"
+			;;
+		'-f')
+			FORCE="true"
+			;;
+		'-i')
+			IGNORE="true"
+			;;
+		'-o')
+			ONLY_MATCHING="true"
+			;;
+		'-p')
+			PROMPT_FOR_PATCH="true"
+			;;
+		'-y')
+			YES="true"
+			;;
+		*)
+			print_error "Unrecognized option $1"
+			abort
+	esac
+	shift
+done
+
+ACTION=$1
+
+#########################################################################
+#                USER CONFIG FROM /etc/sbm/sbm.conf                     #
+#########################################################################
+if [ "$ACTION" == "setup" ];then
+	create_default_config
+	exit 0
+fi
+
+if [ ! -f $CONF_FILE ];then
+	cat <<- EOF
+		You seem to be running $(basename $0) for the first time.
+		Run 
+		    $(basename $0) setup 
+		to get started. This will create the required configuration files.
+	EOF
+	exit 0
+fi
+
+. $CONF_FILE
+
+#########################################################################
+#                    CREATE FOLDERS IF NEEDED                           #
+#########################################################################
+if [ ! -d $BUILD_SUBDIR ];then
+	mkdir -p $BUILD_SUBDIR
+fi
+if [ ! -d $META_DIR ];then
+	mkdir -p $META_DIR
+fi
+if [ ! -d ${SBM_LOGFILE%\/*} ];then
+	mkdir -p ${SBM_LOGFILE%\/*}
+fi
+
+#########################################################################
+#                        DERIVED CONFIG                                 #
+#########################################################################
+
+case "$MY_ARCH" in
+	'32bit')
+		MY_ARCH_PACKAGE_APPENDIX=i486  # untested...
+		;;
+	'64bit')
+		MY_ARCH_PACKAGE_APPENDIX=x86_64
+		;;
+	*)	
+		MY_ARCH_PACKAGE_APPENDIX=$( uname -m )
+		;;
+esac
+
+OLDIFS=$IFS
+IFS=$'\n';
+declare -A NAME_REGEX_MAP
+declare -A VERSION_REGEX_MAP
+if [ -f $CONF_DIR/regex.conf ];then 
+	for entry in $(cat $CONF_DIR/regex.conf); do
+		line_nocomments=${entry%%#*}
+		line=$(echo "$line_nocomments" | sed -e "s/^\s*//g")
+		if [ "$line" == "" ];then
+			continue
+		fi
+		key=$(echo $line | cut -d' ' -f 1)
+		conf_name_regex=$(echo $line | cut -d' ' -f 2)
+		conf_version_regex=$(echo $line | cut -d' ' -f 3)
+	#	echo "key: $KEY"
+	#	echo "Name: $NAME_REGEX"
+	#	echo "Version: $VERSION_REGEX"
+		NAME_REGEX_MAP[$key]=$conf_name_regex
+		VERSION_REGEX_MAP[$key]=$conf_version_regex
+	done
+fi
+declare -A PACKAGE_NAMES_MAP
+declare -A PACKAGE_VERSIONS_MAP
+if [ -f $VERSIONS_LOGFILE ];then 
+	for entry in $(cat $VERSIONS_LOGFILE); do
+		line_nocomments=${entry%%#*}
+		line=$(echo "$line_nocomments" | sed -e "s/^\s*//g")
+		if [ "$line" == "" ];then
+			continue
+		fi
+		key=$(echo $line | cut -d';' -f 1)
+		found_name=$(echo $line | cut -d';' -f 2)
+		found_version=$(echo $line | cut -d';' -f 3)
+		PACKAGE_NAMES_MAP[$key]=$found_name
+		PACKAGE_VERSIONS_MAP[$key]=$found_version
+	done
+fi
+IFS=$OLDIFS
+#for K in "${!NAME_REGEX_MAP[@]}"; do
+#	echo "\"$K\" -> "${NAME_REGEX_MAP[$K]}
+#done
+#for K in "${!PACKAGE_VERSIONS_MAP[@]}"; do
+#	echo $K" -> "${PACKAGE_VERSIONS_MAP[$K]}
+#done
+
+case "$ACTION" in
+	'search')
+		if [ $# -ne 2 ];then
+			print_usage
+			exit -1
+		fi
+		search $2
+		exit 0
+		;;
+	'update')
+		update_packages
+		exit 0
+		;;
+	'info')
+		show_package $2
+		exit 0
+		;;
+	'dep')
+		shift
+		check_dependencies "$@"
+		exit 0
+		;;
+	'list')
+		list_installed_packages
+		exit 0
+		;;
+	'status')
+		list_package_update_status | column -t -s ';'
+		exit 0
+		;;
+	'version')
+		echo "$2 version available:"
+		get_package_sb_version $2
+		echo "$2 version installed:"
+		get_package_installed_version $2
+		exit 0
+		;;
+	'install')
+		echo "Installing package $2"
+		install_package $2 "install"
+		;;
+	'upgrade')
+		echo "Upgrading package $2"
+		upgrade_package $2
+		;;
+	'upgrade-all')
+		echo "Upgrading all packages"
+		upgrade_all
+		;;
+	'remove')
+		echo "Removing package $2"
+		sed -i "/^$2;/d" $VERSIONS_LOGFILE
+		removepkg $2 && log "remove  - $2"
+		;;
+	*)
+		print_usage
+		exit -1
+esac		
+
