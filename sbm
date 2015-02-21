@@ -77,6 +77,9 @@ function create_default_config(){
 		# The slackbuilds.org base url. This is not likely to change either
 		BASE_URL=http://slackbuilds.org/repository/$RELEASE
 		#
+		# Similar to the above. This is the base url to the downloads repo
+		DOWNLOAD_BASE_URL=http://slackbuilds.org/slackbuilds/$RELEASE
+		#
 		# If you are running a 32bit system you want to uncomment the 32bit line
 		# and comment the 64bit line. 
 		#MY_ARCH=32bit
@@ -306,6 +309,16 @@ function check_meta_info_available(){
 #                  DOWNLOAD FILES WITH HTTP OR FTP                      #
 #########################################################################
 
+function get_relative_url(){
+	local name=$1
+	local relative_path=$(grep -A 10 "SLACKBUILD NAME: $name$" $META_DIR/SLACKBUILDS.TXT | grep LOCATION | cut -d":" -f 2 | tr -d " .")
+	if [ "$relative_path" == "" ];then
+		print_error "Package $name not found!"
+		abort
+	fi
+	echo $relative_path
+}
+
 function get_file(){
 	local file_to_get=$1
 	local md5sum=$2
@@ -366,6 +379,8 @@ function show_package(){
 	check_meta_info_available
 	local package_name=$1
 	grep -A 10 "SLACKBUILD NAME: $package_name\$" $META_DIR/SLACKBUILDS.TXT
+	local url=${DOWNLOAD_BASE_URL}$(get_relative_url $package_name)
+	curl ${url}"/README"
 }
 
 function filename_to_package_name (){
@@ -584,11 +599,7 @@ function install_package(){
 	check_meta_info_available
 	local name=$1
 	INSTALL_TYPE=${2:-install}
-	local relative_path=$(grep -A 10 "SLACKBUILD NAME: $name$" $META_DIR/SLACKBUILDS.TXT | grep LOCATION | cut -d":" -f 2 | tr -d " .")
-	if [ "$relative_path" == "" ];then
-		print_error "Package $name not found!"
-		abort
-	fi
+	local relative_path=$(get_relative_url $name)
 	local url=${BASE_URL}${relative_path}"/"
 	echo "Package URL found: "$url
 	check_dependencies $name
