@@ -622,7 +622,7 @@ function install_package(){
 	#get_file $SOURCE_LINK
 	get_sources $url
 	local build_script=$(ls | grep SlackBuild | head -n 1)
-	if [ -x $PATCHES_DIR/${name}.sh ] && [ "$IGNORE" != "TRUE" ];then
+	if [ -x $PATCHES_DIR/${name}.sh ] && [ "$IGNORE" != "true" ];then
 		echo "Found patch script $PATCHES_DIR/${name}.sh. Apply now? [Y/n]"
 		read decision
 		if [[ "$decision" =~ [Nn] ]];then 
