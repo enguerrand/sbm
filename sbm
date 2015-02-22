@@ -80,6 +80,12 @@ function create_default_config(){
 		# Similar to the above. This is the base url to the downloads repo
 		DOWNLOAD_BASE_URL=http://slackbuilds.org/slackbuilds/$RELEASE
 		#
+		# This prefix gets prepended to execution of the Slackbuild script. Can be used
+		# to set environment variables etc.
+		# The current setting gives you MAKEFLAGS=-j1. You can override this by
+		# setting this environment variable before calling sbm. 
+		SLACKBUILD_PREFIX=${SLACKBUILD_PREFIX:="MAKEFLAGS=-j1"}
+		#
 		# If you are running a 32bit system you want to uncomment the 32bit line
 		# and comment the 64bit line. 
 		#MY_ARCH=32bit
@@ -648,7 +654,7 @@ function install_package(){
 		pwd
 		read sacksuppe
 	fi		
-	eval ./$build_script || abort
+	eval $SLACKBUILD_PREFIX ./$build_script || abort
 	cd ..
 	local resulting_package=$(ls /tmp/${SLACKBUILD_SUBDIR}*_SBo.tgz)
 	mv $resulting_package . || abort 
