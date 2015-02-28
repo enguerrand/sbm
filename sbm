@@ -384,9 +384,12 @@ function update_packages(){
 function show_package(){
 	check_meta_info_available
 	local package_name=$1
+	local show_readme=${2:-"true"}
 	grep -A 10 "SLACKBUILD NAME: $package_name\$" $META_DIR/SLACKBUILDS.TXT
 	local url=${DOWNLOAD_BASE_URL}$(get_relative_url $package_name)
-	curl ${url}"/README"
+	if [ "$show_readme" == "true" ];then
+		curl -s ${url}"/README"
+	fi
 }
 
 function filename_to_package_name (){
@@ -441,7 +444,7 @@ function get_package_installed_version(){
 }
 
 function get_package_sb_version(){
-	show_package $1 | grep VERSION | cut -d":" -f 2 | tr -d ' '
+	show_package $1 "false" | grep VERSION | cut -d":" -f 2 | tr -d ' '
 }
 
 function list_package_update_status(){
