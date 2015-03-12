@@ -86,6 +86,13 @@ function create_default_config(){
 		# setting this environment variable before calling sbm. 
 		SLACKBUILD_PREFIX=${SLACKBUILD_PREFIX:="MAKEFLAGS=-j1"}
 		#
+		# Packages listed here will be ignored by upgrade-all
+		# Expects a list of package names, delimited by semi-colons (;), and wrapped in 
+		# double quotes.
+		# Be careful not to include any white spaces. 
+		# Example:
+		# NO_UPGRADE="package_1;package_2"
+		#
 		# If you are running a 32bit system you want to uncomment the 32bit line
 		# and comment the 64bit line. 
 		#MY_ARCH=32bit
@@ -584,8 +591,30 @@ function check_dependencies() {
 #                 BUILD / INSTALL / UPGRADE PACKAGE                     #
 #########################################################################
 
+function is_package_blacklisted(){
+	if [ "$NO_UPGRADE" == "" ];then
+		echo "false"
+		return
+	fi
+	local package_name=$1
+	OLD_IFS=$IFS
+	IFS=";"
+	for blacklisted_pkg in $NO_UPGRADE; do
+		if [ "$blacklisted_pkg" == "$package_name" ]; then
+			echo "true"
+			IFS=$OLD_IFS
+			return
+		fi
+	done
+	echo "false"
+	IFS=$OLD_IFS
+}
+
 function upgrade_all(){
 	for pkg in $(list_package_update_status | cut -d' ' -f 1) ; do 
+		if [ "$(is_package_blacklisted $pkg)" == "true" ];then
+			continue
+		fi
 		if [ "$pkg" == "==" ];then
 			break
 		fi
