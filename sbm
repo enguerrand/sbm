@@ -212,19 +212,20 @@ function print_usage(){
 		ACTION.
 
 		ACTIONS:
-		  help              : Shows this help
-		  setup             : Initializes all needed configuration files / directories
-		  install <PACKAGE> : Installs package <PACKAGE>
-		  upgrade <PACKAGE> : Upgrades package <PACKAGE>
-		  upgrade-all       : Upgrades all outdated slackbuild packages
-		  remove  <PACKAGE> : Removes package <PACKAGE>
-		  search  <PACKAGE> : Looks for package <PACKAGE>
-		  info    <PACKAGE> : Shows info for package <PACKAGE>
-		  dep     <PACKAGE> : Lists dependencies for package <PACKAGE>                  
-		  update            : Updates the local copy of the package list
-		  list              : Lists all installed slackbuild packages
-		  status            : Lists packages for which newer versions are available
-				    : at Slackbuilds.org
+		  help                : Shows this help
+		  setup               : Initializes all needed configuration files / directories
+		  install <PACKAGE>   : Installs package <PACKAGE>
+		  reinstall <PACKAGE> : Reinstalls package <PACKAGE>
+		  upgrade <PACKAGE>   : Upgrades package <PACKAGE>
+		  upgrade-all         : Upgrades all outdated slackbuild packages
+		  remove  <PACKAGE>   : Removes package <PACKAGE>
+		  search  <PACKAGE>   : Looks for package <PACKAGE>
+		  info    <PACKAGE>   : Shows info for package <PACKAGE>
+		  dep     <PACKAGE>   : Lists dependencies for package <PACKAGE>                  
+		  update              : Updates the local copy of the package list
+		  list                : Lists all installed slackbuild packages
+		  status              : Lists packages for which newer versions are available
+		                      : at Slackbuilds.org
 
 		FLAGS:
 		  -a: all. 
@@ -698,6 +699,10 @@ function install_package(){
 		'install')
 			installpkg $tarball_name || abort 
 			;;
+		'reinstall')
+			removepkg $name || abort
+			installpkg $tarball_name || abort 
+			;;
 		'upgrade')
 			upgradepkg $tarball_name || abort
 			;;
@@ -887,6 +892,10 @@ case "$ACTION" in
 	'install')
 		echo "Installing package $2"
 		install_package $2 "install"
+		;;
+	'reinstall')
+		echo "Reinstalling package $2"
+		install_package $2 "reinstall"
 		;;
 	'upgrade')
 		echo "Upgrading package $2"
