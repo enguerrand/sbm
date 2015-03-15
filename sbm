@@ -636,6 +636,7 @@ function upgrade_package(){
 function install_package(){
 	check_meta_info_available
 	local name=$1
+	local sb_version=$(get_package_sb_version $name)
 	INSTALL_TYPE=${2:-install}
 	local relative_path=$(get_relative_url $name)
 	local url=${BASE_URL}${relative_path}"/"
@@ -651,14 +652,16 @@ function install_package(){
 		ls $PACKAGES_LOG_DIR/$name-[0-9]*
 		user_confirm
 	fi
-	TARGET_DIR=$BUILD_SUBDIR/$name
+	TARGET_DIR=$BUILD_SUBDIR/$name/$sb_version
 	mkdir -p $TARGET_DIR
 	cd $TARGET_DIR
 	parse_web_page $url
 	local slackbuild=${SLACKBUILD_LINK##*\/}
+	echo "Getting slackbuild $slackbuild"
 	get_file $SLACKBUILD_LINK
 
 	SLACKBUILD_SUBDIR=$(echo $slackbuild | sed "s/.tar.gz//g")
+	echo "Building slackbuild in directory $SLACKBUILD_SUBDIR"
 	if [ -e $SLACKBUILD_SUBDIR ] && [ "$INSTALL_TYPE" == "install" ];then
 		 print_warning "$TARGET_DIR already exists!";
 		 user_confirm
@@ -706,7 +709,6 @@ function install_package(){
 	log "$INSTALL_TYPE - $name"
 	echo ""
 	local local_version=$(get_package_installed_version $name)
-	local sb_version=$(get_package_sb_version $name)
 	if [ "$sb_version" != "$local_version" ];then
 		sed -i "/^$name;/d" $VERSIONS_LOGFILE
 		echo $name";"$tarball_name";"$sb_version >> $VERSIONS_LOGFILE
