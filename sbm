@@ -566,6 +566,12 @@ function check_dependencies() {
 					found="OPTIONAL dependencies MAY BE LISTED IN THE README FILE"
 					optional_deps="true"
 				fi
+				if [ "$found" == "" ];then   # Package name syntax might be exotic. Use show version to double-check
+					local dep_version=$(get_package_installed_version $DEP)
+					if [ "$dep_version" != "not installed" ];then
+						found=$DEP" version: "$dep_version
+					fi
+				fi
 				if [ "$found" == "" ];then
 					found=$no_match_string
 					all_deps_met="false"
