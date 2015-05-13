@@ -311,8 +311,8 @@ function user_confirm(){
 function offer_ctrl_c(){
 	if [ "$YES" != "true" ];then
 		echo "Abort with ctrl-c or continue with any key"
+		read a
 	fi
-	read a
 }
 
 #########################################################################
