@@ -248,6 +248,10 @@ function print_usage(){
 		        and downloading the sources so that patches can be applied.
 		        when used in conjuction ACTION install.
 
+		  -r: resolve dependencies.
+			Automatically resolves dependencies in conjunction with ACTIONs
+			install, upgrade or upgrade-all
+
 		  -y: yes. 
 		        Skips dependency prompt (if all required dependencies are met) 
 		        on ACTIONs install, upgrade and upgrade-all
@@ -302,6 +306,13 @@ function user_confirm(){
 		fi
 		exit -1
 	fi
+}
+
+function offer_ctrl_c(){
+	if [ "$YES" != "true" ];then
+		echo "Abort with ctrl-c or continue with any key"
+	fi
+	read a
 }
 
 #########################################################################
@@ -550,6 +561,11 @@ function get_sources(){
 #                     CHECK DEPENDENCIES FOR A PACKAGE                  #
 #########################################################################
 
+function list_dependencies(){
+	local package_to_check=$1
+	grep -A 10 "SLACKBUILD NAME: $package_to_check\$" $META_DIR/SLACKBUILDS.TXT | grep REQUIRES | cut -d":" -f 2 
+}
+
 function check_dependencies() {
 	check_meta_info_available
 	local no_match_string="NO MATCHING PACKAGE found !!"
@@ -557,7 +573,7 @@ function check_dependencies() {
 		echo ""
 		echo "Dependencies for package $package_to_check :"
 		if grep -q "SLACKBUILD NAME: $package_to_check\$" $META_DIR/SLACKBUILDS.TXT ;then
-			local dependencies=$(grep -A 10 "SLACKBUILD NAME: $package_to_check\$" $META_DIR/SLACKBUILDS.TXT | grep REQUIRES | cut -d":" -f 2 )
+			local dependencies=$(list_dependencies $package_to_check)
 			local all_deps_met="true"
 			local optional_deps="false"
 			for DEP in $dependencies; do 
@@ -654,11 +670,16 @@ function install_package(){
 	local relative_path=$(get_relative_url $name)
 	local url=${BASE_URL}${relative_path}"/"
 	echo "Package URL found: "$url
-	check_dependencies $name
-	if [ "$YES" != "true" ];then
-		echo "Abort with ctrl-c or continue with any key"
+	if [ "$RECURSE_DEPS" == "true" ];then
+		for recursive_dep in $(check_dependencies $name | grep "NO MATCHING PACKAGE" | sed -e 's/ : -> .*//g'); do
+			echo "Install missing dependency ${recursive_dep}... "
+			offer_ctrl_c
+			install_package $recursive_dep
+		done
+	else
+		check_dependencies $name
+		offer_ctrl_c
 	fi
-	read a
 	if [ -e $PACKAGES_LOG_DIR/$name-[0-9]* ] && [ "$INSTALL_TYPE" == "install" ]; then
 		echo ""
 		print_error "Package already installed: ";
@@ -757,6 +778,9 @@ while [[ $1 =~ ^- ]];do
 			;;
 		'-p')
 			PROMPT_FOR_PATCH="true"
+			;;
+		'-r')
+			RECURSE_DEPS="true"
 			;;
 		'-y')
 			YES="true"
