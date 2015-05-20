@@ -25,6 +25,7 @@
 #########################################################################
 #                         HARD CODED CONFIG                             #
 #########################################################################
+SBM_VERSION="1.0_RC1"
 CONF_DIR=/etc/sbm
 CONF_FILE=$CONF_DIR/sbm.conf
 PATCHES_DIR=$CONF_DIR/patches
@@ -226,6 +227,7 @@ function print_usage(){
 		  list                : Lists all installed slackbuild packages
 		  status              : Lists packages for which newer versions are available
 		                      : at Slackbuilds.org
+		  sbm-version	      : Shows version of sbm
 
 		FLAGS:
 		  -a: all. 
@@ -945,6 +947,9 @@ case "$ACTION" in
 		echo "Removing package $2"
 		sed -i "/^$2;/d" $VERSIONS_LOGFILE
 		removepkg $2 && log "remove  - $2"
+		;;
+	'sbm-version')
+		echo "$SBM_VERSION"
 		;;
 	*)
 		print_usage
