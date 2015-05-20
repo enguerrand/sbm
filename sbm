@@ -251,8 +251,8 @@ function print_usage(){
 		        when used in conjuction ACTION install.
 
 		  -r: resolve dependencies.
-			Automatically resolves dependencies in conjunction with ACTIONs
-			install, upgrade or upgrade-all
+		        Automatically resolves dependencies in conjunction with ACTIONs
+		        install, upgrade or upgrade-all
 
 		  -y: yes. 
 		        Skips dependency prompt (if all required dependencies are met) 
