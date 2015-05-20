@@ -25,7 +25,7 @@
 #########################################################################
 #                         HARD CODED CONFIG                             #
 #########################################################################
-SBM_VERSION=1.0_RC2
+SBM_VERSION=1.0_RC3
 CONF_DIR=/etc/sbm
 CONF_FILE=$CONF_DIR/sbm.conf
 PATCHES_DIR=$CONF_DIR/patches
@@ -404,7 +404,7 @@ function update_packages(){
 
 function sbm_version(){
 	echo "Current:   $SBM_VERSION"
-	local available_version=$(curl -s https://raw.githubusercontent.com/enguerrand/sbm/master/sbm | grep SBM_VERSION= | cut -d'=' -f 2)
+	local available_version=$(curl -s https://raw.githubusercontent.com/enguerrand/sbm/master/sbm | grep ^SBM_VERSION= | cut -d'=' -f 2)
 	echo "Available: $available_version"
 }
 
