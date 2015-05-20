@@ -25,7 +25,7 @@
 #########################################################################
 #                         HARD CODED CONFIG                             #
 #########################################################################
-SBM_VERSION=1.0_RC3
+SBM_VERSION=1.0_RC4
 CONF_DIR=/etc/sbm
 CONF_FILE=$CONF_DIR/sbm.conf
 PATCHES_DIR=$CONF_DIR/patches
@@ -772,6 +772,27 @@ function install_package(){
 }
 
 #########################################################################
+#                          CHECK INPUT ARGUMENTS                        #
+#########################################################################
+
+check_param_count(){
+	local expected_count=$1
+	local actual_count=$2
+	if [ $actual_count -eq $expected_count ];then
+		return
+	fi
+	if [ $actual_count -lt $expected_count ];then
+		echo "Error: Arguments missing."
+	else
+		echo "Error: Too many arguments."
+	fi
+	echo "Expected arguments: $expected_count "
+	echo "Given arguments:    $actual_count "
+	echo ""
+	print_usage
+	exit -1
+}
+#########################################################################
 #                         PROCESS INPUT ARGUMENTS                       #
 #########################################################################
 
@@ -903,35 +924,38 @@ IFS=$OLDIFS
 
 case "$ACTION" in
 	'search')
-		if [ $# -ne 2 ];then
-			print_usage
-			exit -1
-		fi
+		check_param_count 2 $#
 		search $2
 		exit 0
 		;;
 	'update')
+		check_param_count 1 $#
 		update_packages
 		exit 0
 		;;
 	'info')
+		check_param_count 2 $#
 		show_package $2
 		exit 0
 		;;
 	'dep')
+		check_param_count 2 $#
 		shift
 		check_dependencies "$@"
 		exit 0
 		;;
 	'list')
+		check_param_count 1 $#
 		list_installed_packages
 		exit 0
 		;;
 	'status')
+		check_param_count 1 $#
 		list_package_update_status | column -t -s ';'
 		exit 0
 		;;
 	'version')
+		check_param_count 2 $#
 		echo "$2 version available:"
 		get_package_sb_version $2
 		echo "$2 version installed:"
@@ -939,27 +963,33 @@ case "$ACTION" in
 		exit 0
 		;;
 	'install')
+		check_param_count 2 $#
 		echo "Installing package $2"
 		install_package $2 "install"
 		;;
 	'reinstall')
+		check_param_count 2 $#
 		echo "Reinstalling package $2"
 		install_package $2 "reinstall"
 		;;
 	'upgrade')
+		check_param_count 2 $#
 		echo "Upgrading package $2"
 		upgrade_package $2
 		;;
 	'upgrade-all')
+		check_param_count 1 $#
 		echo "Upgrading all packages"
 		upgrade_all
 		;;
 	'remove')
+		check_param_count 2 $#
 		echo "Removing package $2"
 		sed -i "/^$2;/d" $VERSIONS_LOGFILE
 		removepkg $2 && log "remove  - $2"
 		;;
 	'sbm-version')
+		check_param_count 1 $#
 		sbm_version
 		exit 0
 		;;
