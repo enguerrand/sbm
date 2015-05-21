@@ -25,7 +25,7 @@
 #########################################################################
 #                         HARD CODED CONFIG                             #
 #########################################################################
-SBM_VERSION=1.0_RC4
+SBM_VERSION=1.0_RC5
 CONF_DIR=/etc/sbm
 CONF_FILE=$CONF_DIR/sbm.conf
 PATCHES_DIR=$CONF_DIR/patches
@@ -728,7 +728,7 @@ function install_package(){
 			echo "Ok. Will ignore patch script."
 		else
 			echo "Ok. Applying patch script."
-			$PATCHES_DIR/${name}.sh
+			$PATCHES_DIR/${name}.sh || print_error "Patchfile child process completed with errors!"
 		fi
 	fi
 	if [ "$PROMPT_FOR_PATCH" == "true" ];then
