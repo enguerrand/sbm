@@ -252,7 +252,9 @@ function print_usage(){
 
 		  -r: resolve dependencies.
 		        Automatically resolves dependencies in conjunction with ACTIONs
-		        install, upgrade or upgrade-all
+		        install, upgrade or upgrade-all. For ACTION dep this simply outputs
+			a list of all recursive dependencies, with the last found dependency 
+			at the beginning.
 
 		  -y: yes. 
 		        Skips dependency prompt (if all required dependencies are met) 
@@ -608,13 +610,19 @@ function check_dependencies() {
 				if [ "$found" == "$no_match_string" ] || [ "$ONLY_MATCHING" != "true" ];then
 					echo $DEP" : -> $found" 
 				fi
+
+				if [ "$RECURSE_DEPS_CHECK" == "true" ];then
+					check_dependencies $DEP
+				fi
 			done
-			if [ "$all_deps_met" != "true" ]; then
-				print_error "SOME DEPENDENCIES WERE NOT FULLFILLED  !!!!"
-			elif [ "$optional_deps" == "true" ]; then
-				print_warning "SOME OPTIONAL DEPENDENCIES WERE NOT FULLFILLED !"
-			else
-				print_ok "All dependencies met."
+			if [ "$RECURSE_DEPS_CHECK" != "true" ] ;then
+				if [ "$all_deps_met" != "true" ]; then
+					print_error "SOME DEPENDENCIES WERE NOT FULLFILLED  !!!!"
+				elif [ "$optional_deps" == "true" ]; then
+					print_warning "SOME OPTIONAL DEPENDENCIES WERE NOT FULLFILLED !"
+				else
+					print_ok "All dependencies met."
+				fi
 			fi
 			echo ""
 		else
@@ -941,7 +949,12 @@ case "$ACTION" in
 	'dep')
 		check_param_count 2 $#
 		shift
-		check_dependencies "$@"
+		if [ "$RECURSE_DEPS" == "true" ];then
+			RECURSE_DEPS_CHECK="true"
+			check_dependencies "$@"	| grep '>' | tac | awk '!x[$0]++'
+		else
+			check_dependencies "$@"
+		fi
 		exit 0
 		;;
 	'list')
