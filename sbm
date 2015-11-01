@@ -253,8 +253,8 @@ function print_usage(){
 		  -r: resolve dependencies.
 		        Automatically resolves dependencies in conjunction with ACTIONs
 		        install, upgrade or upgrade-all. For ACTION dep this simply outputs
-			a list of all recursive dependencies, with the last found dependency 
-			at the beginning.
+		        a list of all recursive dependencies, with the last found dependency 
+		        at the beginning.
 
 		  -y: yes. 
 		        Skips dependency prompt (if all required dependencies are met) 
@@ -353,7 +353,7 @@ function get_file(){
 	local md5sum=$2
 	echo "Downloading file $file_to_get"
 	local filename=${file_to_get##*\/}
-	if [ -e $filename ] && [ "$INSTALL_TYPE" == "install" ];then
+	if [ -e $filename ] && [ "$INSTALL_TYPE" == "install" ] && [ "$YES" != "true" ];then
 		print_warning "$filename already exists! Download again?"
 		read decision
 		if [[ "$decision" =~ [YyJj] ]];then 
@@ -361,7 +361,7 @@ function get_file(){
 		else
 			return
 		fi
-	elif [ -e $filename ];then # reinstall or upgrade => overwriting is ok
+	elif [ -e $filename ];then # reinstall or upgrade or yes=true => overwriting is ok
 		rm -f $filename
 	fi
 	local prot=${file_to_get%%\:*}
@@ -717,7 +717,7 @@ function install_package(){
 
 	SLACKBUILD_SUBDIR=$(echo $slackbuild | sed "s/.tar.gz//g")
 	echo "Building slackbuild in directory $SLACKBUILD_SUBDIR"
-	if [ -e $SLACKBUILD_SUBDIR ] && [ "$INSTALL_TYPE" == "install" ];then
+	if [ -e $SLACKBUILD_SUBDIR ] && [ "$INSTALL_TYPE" == "install" ] && [ "$YES" != "true" ];then
 		 print_warning "$TARGET_DIR already exists!";
 		 user_confirm
 		 rm -rf $SLACKBUILD_SUBDIR
