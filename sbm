@@ -98,6 +98,13 @@ function create_default_config(){
 		# and comment the 64bit line. 
 		#MY_ARCH=32bit
 		MY_ARCH=64bit
+        #
+        # Set to true to be able to install multilib packages
+        MULTILIB_ENABLED=false
+        # The path where multilib packages are stored in case you want to use it.
+        MULTILIB_PATH=/usr/src/multilib
+        # The location where multilib packages are downloaded from. No http:// !
+        MULTILIB_REPO=taper.alienbase.nl/mirrors/people/alien/multilib
 	EOF
 
 	cat > $CONF_DIR/regex.conf <<- "EOF"
@@ -227,6 +234,7 @@ function print_usage(){
 		  list                : Lists all installed slackbuild packages
 		  status              : Lists packages for which newer versions are available
 		                      : at Slackbuilds.org
+		  setup-multilib      : Sets up multilib on 64bit systems
 		  sbm-version	      : Shows version of sbm
 
 		FLAGS:
@@ -670,6 +678,9 @@ function upgrade_all(){
 		fi
 		upgrade_package $pkg 
 	done
+    [ "x${MULTILIB_ENABLED}" != "xtrue" ] && return
+    echo "Upgrading multilib packages"
+    upgrade_multilib
 }
 
 function upgrade_package(){
@@ -777,6 +788,39 @@ function install_package(){
 	fi
 	print_ok "Completed successfully!"
 	echo ""
+}
+
+#########################################################################
+#                             MULTILIB                                  #
+#########################################################################
+
+check_multilib_config(){
+    [ "x${MULTILIB_ENABLED}" != "xtrue" ] && print_error "Multilib is not enabled in config file $CONF_FILE"
+    [ "x${MY_ARCH}" != "x64bit" ] && print_error "MY_ARCH is not set to \"64bit\" in config file $CONF_FILE"
+    [ -z "${MULTILIB_PATH}" ] && print_error "MULTILIB_PATH is not set in config file $CONF_FILE"
+    [ -z "${MULTILIB_REPO}" ] && print_error "MULTILIB_REPO is not set in config file $CONF_FILE"
+    [ -z "${RELEASE}" ] && print_error "RELEASE is not set in config file $CONF_FILE"
+}
+
+setup_multilib(){
+   check_multilib_config 
+   mkdir -p $MULTILIB_PATH
+   cd $MULTILIB_PATH
+   lftp -c "open http://${MULTILIB_REPO} ; mirror -c -e $RELEASE"
+   cd $RELEASE
+   upgradepkg --reinstall --install-new *.t?z
+   upgradepkg --install-new slackware64-compat32/*-compat32/*.t?z
+   echo [0-9]+alien >> /etc/slackpkg/blacklist
+   echo [0-9]+compat32 >> /etc/slackpkg/blacklist
+}
+
+upgrade_multilib(){
+   check_multilib_config 
+   cd $MULTILIB_PATH
+   rsync -av rsync://${MULTILIB_REPO}/${RELEASE}/ ${RELEASE}/
+   cd $RELEASE
+   upgradepkg --install-new *.t?z
+   upgradepkg --install-new slackware64-compat32/*-compat32/*.t?z
 }
 
 #########################################################################
@@ -1004,6 +1048,11 @@ case "$ACTION" in
 	'sbm-version')
 		check_param_count 1 $#
 		sbm_version
+		exit 0
+		;;
+	'setup-multilib')
+		check_param_count 1 $#
+        setup_multilib
 		exit 0
 		;;
 	*)
