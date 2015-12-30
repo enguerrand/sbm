@@ -134,12 +134,12 @@ function create_default_config(){
 		#
 		# Example for portaudio.
 		# ls /var/log/packages/porta* yields:
-		# /var/log/packages/portaudio-V19-x86_64-2_SBo
+		# /var/log/packages/portaudio-v19_20140130-x86_64-1_SBo
 		# The below line would work to recognize portaudio as being installed with 
-		# version V19
+		# version v19_20140130
 		#
 		# Example entry for portaudio
-		# portaudio ^portaudio-V.* V[0-9]+
+		# portaudio ^portaudio-v.* v[0-9]+_[0-9]+
 	EOF
 
 	cat <<- EOF
