@@ -233,8 +233,12 @@ function print_usage(){
 		  update              : Updates the local copy of the package list
 		  list                : Lists all installed slackbuild packages
 		  status              : Lists packages for which newer versions are available
-		                      : at Slackbuilds.org
-		  setup-multilib      : Sets up multilib on 64bit systems
+		                        at Slackbuilds.org
+		  setup-multilib      : Sets up multilib on 64bit systems. Calling this 
+		                        explicitly should usually not be required. Just
+		                        set MULTILIB_ENABLED=true in the config file an
+		                        sbm will propose to setup multilib the next time
+		                        it runs.
 		  sbm-version	      : Shows version of sbm
 
 		FLAGS:
@@ -802,25 +806,41 @@ check_multilib_config(){
     [ -z "${RELEASE}" ] && print_error "RELEASE is not set in config file $CONF_FILE"
 }
 
+check_multilib_installed(){
+    check_multilib_config
+    ls $PACKAGES_LOG_DIR | grep -q alien \
+        && ls $PACKAGES_LOG_DIR | grep -q compat32 \
+        && return
+    print_warning "MULTILIB_ENABLED is true but multilib does not seem to be installed..."
+	if [ "$YES" != "true" ];then
+	    read -p "Set up multilib now? [Y/n]: " decision
+		if [[ "$decision" =~ [Nn] ]];then 
+            return
+		fi
+	fi
+    setup_multilib
+}
+
 setup_multilib(){
-   check_multilib_config 
-   mkdir -p $MULTILIB_PATH || print_error "Could not create directory $MULTILIB_PATH"
-   cd $MULTILIB_PATH || print_error "Could not enter directory $MULTILIB_PATH"
-   lftp -c "open http://${MULTILIB_REPO} ; mirror -c -e $RELEASE" || print_error "Error during download of multilib packages"
-   cd $RELEASE || print_error "Could not enter directory ${MULTILIB_PATH}/${RELEASE}"
-   upgradepkg --reinstall --install-new *.t?z
-   upgradepkg --install-new slackware64-compat32/*-compat32/*.t?z
-   echo [0-9]+alien >> /etc/slackpkg/blacklist
-   echo [0-9]+compat32 >> /etc/slackpkg/blacklist
+    echo "Setting up multilib"
+    check_multilib_config 
+    mkdir -p $MULTILIB_PATH || print_error "Could not create directory $MULTILIB_PATH"
+    cd $MULTILIB_PATH || print_error "Could not enter directory $MULTILIB_PATH"
+    lftp -c "open http://${MULTILIB_REPO} ; mirror -c -e $RELEASE" || print_error "Error during download of multilib packages"
+    cd $RELEASE || print_error "Could not enter directory ${MULTILIB_PATH}/${RELEASE}"
+    upgradepkg --reinstall --install-new *.t?z
+    upgradepkg --install-new slackware64-compat32/*-compat32/*.t?z
+    echo [0-9]+alien >> /etc/slackpkg/blacklist
+    echo [0-9]+compat32 >> /etc/slackpkg/blacklist
 }
 
 upgrade_multilib(){
-   check_multilib_config 
-   cd $MULTILIB_PATH || print_error "Could not enter directory $MULTILIB_PATH"
-   rsync -av rsync://${MULTILIB_REPO}/${RELEASE}/ ${RELEASE}/ || print_error "Error during syncing of multilib packages"
-   cd $RELEASE || print_error "Could not enter directory ${MULTILIB_PATH}/${RELEASE}"
-   upgradepkg --install-new *.t?z
-   upgradepkg --install-new slackware64-compat32/*-compat32/*.t?z
+    check_multilib_config 
+    cd $MULTILIB_PATH || print_error "Could not enter directory $MULTILIB_PATH"
+    rsync -av rsync://${MULTILIB_REPO}/${RELEASE}/ ${RELEASE}/ || print_error "Error during syncing of multilib packages"
+    cd $RELEASE || print_error "Could not enter directory ${MULTILIB_PATH}/${RELEASE}"
+    upgradepkg --install-new *.t?z
+    upgradepkg --install-new slackware64-compat32/*-compat32/*.t?z
 }
 
 #########################################################################
@@ -973,6 +993,13 @@ IFS=$OLDIFS
 #for K in "${!PACKAGE_VERSIONS_MAP[@]}"; do
 #	echo $K" -> "${PACKAGE_VERSIONS_MAP[$K]}
 #done
+
+#########################################################################
+#                    SETUP MULTILIB IF NEEDED                           #
+#########################################################################
+
+[ "x${MULTILIB_ENABLED}" == "xtrue" ] && check_multilib_installed
+
 
 case "$ACTION" in
 	'search')
