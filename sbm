@@ -804,10 +804,10 @@ check_multilib_config(){
 
 setup_multilib(){
    check_multilib_config 
-   mkdir -p $MULTILIB_PATH
-   cd $MULTILIB_PATH
-   lftp -c "open http://${MULTILIB_REPO} ; mirror -c -e $RELEASE"
-   cd $RELEASE
+   mkdir -p $MULTILIB_PATH || print_error "Could not create directory $MULTILIB_PATH"
+   cd $MULTILIB_PATH || print_error "Could not enter directory $MULTILIB_PATH"
+   lftp -c "open http://${MULTILIB_REPO} ; mirror -c -e $RELEASE" || print_error "Error during download of multilib packages"
+   cd $RELEASE || print_error "Could not enter directory ${MULTILIB_PATH}/${RELEASE}"
    upgradepkg --reinstall --install-new *.t?z
    upgradepkg --install-new slackware64-compat32/*-compat32/*.t?z
    echo [0-9]+alien >> /etc/slackpkg/blacklist
@@ -816,9 +816,9 @@ setup_multilib(){
 
 upgrade_multilib(){
    check_multilib_config 
-   cd $MULTILIB_PATH
-   rsync -av rsync://${MULTILIB_REPO}/${RELEASE}/ ${RELEASE}/
-   cd $RELEASE
+   cd $MULTILIB_PATH || print_error "Could not enter directory $MULTILIB_PATH"
+   rsync -av rsync://${MULTILIB_REPO}/${RELEASE}/ ${RELEASE}/ || print_error "Error during syncing of multilib packages"
+   cd $RELEASE || print_error "Could not enter directory ${MULTILIB_PATH}/${RELEASE}"
    upgradepkg --install-new *.t?z
    upgradepkg --install-new slackware64-compat32/*-compat32/*.t?z
 }
