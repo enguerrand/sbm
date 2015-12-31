@@ -98,13 +98,13 @@ function create_default_config(){
 		# and comment the 64bit line. 
 		#MY_ARCH=32bit
 		MY_ARCH=64bit
-        #
-        # Set to true to be able to install multilib packages
-        MULTILIB_ENABLED=false
-        # The path where multilib packages are stored in case you want to use it.
-        MULTILIB_PATH=/usr/src/multilib
-        # The location where multilib packages are downloaded from. No http:// !
-        MULTILIB_REPO=taper.alienbase.nl/mirrors/people/alien/multilib
+		#
+		# Set to true to be able to install multilib packages
+		MULTILIB_ENABLED=false
+		# The path where multilib packages are stored in case you want to use it.
+		MULTILIB_PATH=/usr/src/multilib
+		# The location where multilib packages are downloaded from. No http:// !
+		MULTILIB_REPO=taper.alienbase.nl/mirrors/people/alien/multilib
 	EOF
 
 	cat > $CONF_DIR/regex.conf <<- "EOF"
