@@ -720,9 +720,12 @@ function install_package(){
 	fi
 	if [ -e $PACKAGES_LOG_DIR/$name-[0-9]* ] && [ "$INSTALL_TYPE" == "install" ]; then
 		echo ""
-		print_error "Package already installed: ";
+		print_warning "Package already installed: "
 		ls $PACKAGES_LOG_DIR/$name-[0-9]*
-		user_confirm
+		# Not throwing an error here since recursive dependency resolution might
+		# cause a package to be requested more than once => Want to gracefully
+		# continue resolving the dependency tree in that case!
+		return
 	fi
 	TARGET_DIR=$BUILD_SUBDIR/$name/$sb_version
 	mkdir -p $TARGET_DIR
