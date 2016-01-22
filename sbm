@@ -382,7 +382,7 @@ function get_file(){
 	elif [ "$prot" == "https" ];then
 		wget --no-check-certificate $file_to_get || abort
 	else
-		curl $file_to_get > $filename || abort
+		curl $file_to_get > "$filename" || abort
 	fi
 	if [ -z $md5sum ];then
 		echo "No checksum provided"
@@ -534,8 +534,10 @@ function parse_web_page(){
 	local url=$1
 	echo "Downloading $url"
 	wget -O slackpage.html $url || abort
-#	SOURCE_LINK=$(grep "Source Downloads" slackpage.html | grep -o \".*\/\/.*\" | tr -d "\"")
-	SLACKBUILD_LINK=$(grep "Download SlackBuild" slackpage.html | grep -o \".*\/\/.*\" | tr -d "\"")
+#	SLACKBUILD_LINK=$(grep "Download SlackBuild" slackpage.html | grep -o \".*\/\/.*\" | tr -d "\"")
+    SLACKBUILD_LINK=$(grep "Download SlackBuild" slackpage.html | \
+        sed -e 's/.*href=\"\(.*\)\".*>/\1/' |   # isolate the link \
+        sed -e 's#^/#https://slackbuilds.org/#') # in case it is relative, make it absolute
 	rm -f slackpage.html
 }
 
