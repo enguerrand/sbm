@@ -378,12 +378,19 @@ function get_file(){
 	fi
 	local prot=${file_to_get%%\:*}
 	if [ "$prot" == "http" ];then
-		wget $file_to_get || abort
+		wget $file_to_get 
 	elif [ "$prot" == "https" ];then
-		wget --no-check-certificate $file_to_get || abort
+		wget --no-check-certificate $file_to_get 
 	else
-		curl $file_to_get > "$filename" || abort
+		curl $file_to_get > "$filename" 
 	fi
+    if [ $? -ne 0 ];then
+        print_error "Download of $file_to_get failed!"
+        if [ "$FORCE" != "true" ];then
+            abort
+        fi
+    fi
+
 	if [ -z $md5sum ];then
 		echo "No checksum provided"
 	else
